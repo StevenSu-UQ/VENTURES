@@ -414,6 +414,7 @@ body.auth .app-root{ padding-bottom: 20px; }
 
 /* === 手機外框（phone shell）=== */
 .phone-shell{
+    position: relative;
     max-width: var(--container);
     height: min(100vh, 820px);       /* 需要更高就調高 */
     margin: 8px auto;
@@ -730,4 +731,97 @@ width:28px; height:28px; border-radius:999px; cursor:pointer;
 .center > .grid {
     width: 100% !important;
     box-sizing: border-box;
+}
+
+
+/* ==== AI Floating Assistant (FAB + Panel) ==== */
+:root {
+    --ai-teal-1: #00b3c6;
+    --ai-teal-2: #007e95;
+}
+
+/* 隱藏於未登入頁 */
+body.auth .ai-fab,
+body.auth .ai-panel { display: none !important; }
+
+/* 右下圓形按鈕（在底部導覽列上方） */
+.ai-fab{
+    position: fixed;
+    right: max(14px, env(safe-area-inset-right));
+    bottom: calc(var(--tabbar-h) + 18px);
+    width: 56px; height: 56px;
+    border-radius: 999px;
+    border: 0;
+    background: radial-gradient(circle at 30% 20%, var(--ai-teal-1), var(--ai-teal-2));
+    color: #fff;
+    font-size: 22px;
+    display: grid; place-items: center;
+    box-shadow: 0 14px 30px rgba(0,0,0,.18);
+    z-index: 60;
+    cursor: pointer;
+}
+.ai-fab:active { transform: translateY(1px); }
+.ai-fab .dot{
+    position: absolute; top: 6px; right: 6px;
+    width: 10px; height: 10px; border-radius: 999px;
+    background: #ff6b6b; box-shadow: 0 0 0 4px rgba(255,107,107,.25);
+}
+
+/* 彈出小視窗（不全屏） */
+.ai-panel{
+    position: fixed;
+    right: max(14px, env(safe-area-inset-right));
+    bottom: calc(var(--tabbar-h) + 90px);
+    width: min(360px, calc(100vw - 28px));
+    max-width: var(--container);
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 18px 44px rgba(2,6,23,.28);
+    padding: 14px;
+    z-index: 60;
+    display: none;
+}
+.ai-panel.show{ display:block; animation: aiPop .18s ease-out; }
+@keyframes aiPop{ from{ transform: translateY(8px); opacity:0 } to{ transform:none; opacity:1 } }
+
+.ai-head{
+    display:flex; align-items:center; justify-content:space-between;
+    gap: 8px; margin-bottom: 8px;
+}
+.ai-title{ font-weight: 800; }
+.ai-close{
+    appearance:none; border:0; background:#f1f5f9; width:32px; height:32px;
+    border-radius:10px; cursor:pointer; display:grid; place-items:center;
+}
+
+.ai-card{
+    background:#fff; border-radius:14px; box-shadow: var(--shadow);
+    padding:12px; display:grid; gap:8px;
+}
+.ai-row{ display:flex; align-items:flex-start; gap:10px; }
+.ai-chip{
+    flex-shrink:0;
+    padding:4px 10px; border-radius:999px;
+    background:#e0fbff; color:#036672; font-size:12px; font-weight:800;
+}
+.ai-text{ color:#334155; font-size:14px; line-height:1.35; }
+
+.ai-actions{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:6px; }
+.ai-actions .btn{ width:100%; }
+
+
+/* 讓 AI 元件跟著手機殼定位，確保在殼內可見 */
+.phone-shell .ai-fab,
+.phone-shell .ai-panel {
+    position: absolute;          /* 覆寫原本的 fixed */
+    right: 12px;
+    z-index: 999;                /* 確保蓋過底部導覽 */
+}
+.phone-shell .ai-fab {
+    bottom: calc(var(--tabbar-h) + 18px);
+}
+.phone-shell .ai-panel {
+    bottom: calc(var(--tabbar-h) + 90px);
+    width: calc(100% - 24px);    /* 在 420px 容器內看起來更貼合 */
+    max-width: 360px;
 }

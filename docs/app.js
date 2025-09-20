@@ -398,23 +398,25 @@
         return out;
     }
 
+    function currentRoute(){ return (location.hash || '#/login').split('?')[0]; }
+    function currentParams(){ return parseQuery((location.hash.split('?')[1] || '')); }
+
     function setAuthMode(isAuth) {
         document.body.classList.toggle('auth', isAuth);
     }
 
     function mount(html) {
         const root = document.getElementById('appRoot');
-
-        // 如果不是 auth 頁，就在內容最後補上版權行
-        const isAuth = document.body.classList.contains('auth');
-        const legal = isAuth ? '' :
-            `<p class="legal-global">© ${new Date().getFullYear()} JourneyMate (Prototype)</p>`;
-
-        root.innerHTML = html + legal;
-
-        const year = new Date().getFullYear();
-        document.getElementById('year').textContent = year.toString();
+    
+        // 渲染視圖
+        root.innerHTML = html;
+    
+        // 年份元素不是每個頁面都有，做防呆
+        const yearEl = document.getElementById('year');
+        if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+    
         wireGlobalNav();
+        ensureAiWidget();   // 這行才會被執行到，AI 漂浮按鈕就會出現
     }
 
     function fmt(d){ const m = d.getMonth()+1, day=d.getDate(); return `${d.getFullYear()}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`; }
@@ -467,6 +469,117 @@
         // 高亮目前分頁
         const current = location.hash.split('?')[0];
         $$('#bottomNav .tab').forEach(b => b.classList.toggle('active', b.getAttribute('data-route') === current));
+    }
+
+    function ensureAiWidget(){
+        // 找到手機殼；找不到就退回 body
+        const host = document.querySelector('.phone-shell') || document.body;
+    
+        // 已存在就沿用
+        let fab   = host.querySelector('#aiFab');
+        let panel = host.querySelector('#aiPanel');
+    
+        if (!fab) {
+            fab = document.createElement('button');
+            fab.id = 'aiFab';
+            fab.className = 'ai-fab';
+            fab.setAttribute('aria-label', 'AI suggestions');
+            fab.innerHTML = '🤖<span class="dot" aria-hidden="true"></span>';
+            host.appendChild(fab);
+        }
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'aiPanel';
+            panel.className = 'ai-panel';
+            panel.innerHTML = `
+                <div class="ai-head">
+                    <div class="ai-title">AI suggestion</div>
+                    <button class="ai-close" id="aiClose" aria-label="Close">✕</button>
+                </div>
+                <div id="aiSuggestions"></div>
+            `;
+            host.appendChild(panel);
+        }
+    
+        // 顯示/關閉
+        fab.onclick = () => panel.classList.toggle('show');
+        panel.querySelector('#aiClose').onclick = () => panel.classList.remove('show');
+    
+        // 更新建議內容
+        renderAiSuggestions(panel);
+    
+        // 未登入頁隱藏
+        const isAuthPage = document.body.classList.contains('auth');
+        fab.hidden = isAuthPage;
+        panel.hidden = isAuthPage;
+    }
+    
+    
+    /** 簡單生成一個建議卡（原型版） */
+    function renderAiSuggestions(panel){
+        const box = panel.querySelector('#aiSuggestions');
+        const route = currentRoute();
+        const params = currentParams();
+    
+        // 決定要作用到哪個 trip
+        let tripIdx = -1;
+        if (route === '#/planner' && params.t) {
+            tripIdx = AppState.trips.findIndex(x => x.id === params.t);
+        }
+        if (tripIdx < 0) tripIdx = 0; // fallback: 第一個
+    
+        const target = AppState.trips[tripIdx] || { city:'your city', notes:'' };
+    
+        // Demo：根據今天/假裝天氣給一個建議文字
+        const suggestions = [
+            {
+                chip: 'Weather',
+                text: `It may rain in ${target.city}. Consider visiting Queensland Museum instead of outdoor.`,
+                apply: `Museum visit (indoor) • South Brisbane`
+            },
+            {
+                chip: 'Traffic',
+                text: `Traffic peak expected at 5pm. Move dinner earlier or dine near accommodation.`,
+                apply: `Dinner 17:00 near hotel`
+            }
+        ];
+        const s = suggestions[Math.floor(Math.random()*suggestions.length)];
+    
+        box.innerHTML = `
+            <div class="ai-card">
+                <div class="ai-row">
+                    <span class="ai-chip">${s.chip}</span>
+                    <div class="ai-text">${s.text}</div>
+                </div>
+                <div class="ai-actions">
+                    <button class="btn outline" id="aiDismiss">Dismiss</button>
+                    <button class="btn" id="aiApply">Apply Suggestion</button>
+                </div>
+            </div>
+        `;
+    
+        panel.querySelector('#aiDismiss').onclick = () => {
+            panel.classList.remove('show');
+        };
+    
+        panel.querySelector('#aiApply').onclick = () => {
+            // 若在 planner 頁：直接把建議寫進 Notes 欄位；否則寫進該 trip 的 notes 並回到 MyJourney
+            if (currentRoute() === '#/planner') {
+                const ta = document.getElementById('notes');
+                if (ta) {
+                    ta.value = (ta.value ? ta.value + '\n' : '') + `AI • ${s.apply}`;
+                }
+            } else {
+                const idx = tripIdx;
+                const t = AppState.trips[idx];
+                AppState.trips[idx] = { ...t, notes: (t.notes ? t.notes + ' • ' : '') + `AI: ${s.apply}` };
+                alert('Applied to your trip notes!');
+            }
+            panel.classList.remove('show');
+            // 小紅點移除
+            const dot = document.querySelector('#aiFab .dot');
+            if (dot) dot.remove();
+        };
     }
 
     function requireAuth(nextHash) {
