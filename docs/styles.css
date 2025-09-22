@@ -825,3 +825,23 @@ body.auth .ai-panel { display: none !important; }
     width: calc(100% - 24px);    /* 在 420px 容器內看起來更貼合 */
     max-width: 360px;
 }
+
+
+/* AI 面板錢包顯示與底部區 */
+.ai-wallet{
+    font-weight:700; color:#0f766e;
+    background:#ecfeff; border:1px solid #bae6fd;
+    padding:4px 8px; border-radius:999px; font-size:12px;
+}
+.ai-foot{ margin-top:8px; }
+.ai-foot .btn{ width:100%; }
+
+/* Profile 的 Token 卡片 */
+.token-card{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px; margin: -20px 0 12px; /* 靠近上方 hero */
+}
+.token-info .token-label{ color: var(--muted); font-size: 13px; }
+.token-info .token-num{ font-size: 28px; font-weight: 800; line-height:1.1; }
+.token-info .token-sub{ color: var(--muted); font-size:12px; margin-top:2px; }
+.token-card .btn{ flex-shrink:0; }

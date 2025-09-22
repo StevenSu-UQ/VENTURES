@@ -22,6 +22,24 @@
             try { return JSON.parse(localStorage.getItem('jm_user') || '{}'); }
             catch (_) { return {}; }
         },
+        get tokens(){ return Number(localStorage.getItem('jm_tokens') || '0'); },
+        set tokens(v){ localStorage.setItem('jm_tokens', String(Math.max(0, v|0))); },
+        get lastClaim(){ return localStorage.getItem('jm_last_claim') || ''; },
+        set lastClaim(d){ localStorage.setItem('jm_last_claim', d); },
+        canClaimDaily(){
+            const today = new Date().toISOString().slice(0,10);
+            return this.lastClaim !== today;
+        },
+        claimDaily(){
+            if (!this.canClaimDaily()) return false;
+            this.tokens = this.tokens + 1;
+            this.lastClaim = new Date().toISOString().slice(0,10);
+            return true;
+        },
+        consumeToken(n=1){
+            if (this.tokens >= n) { this.tokens = this.tokens - n; return true; }
+            return false;
+        },
         trips: [
             { id: 't1', city: 'Brisbane', start:'2025-10-05', end:'2025-10-07', budget: 120, notes: 'South Bank • QAGOMA • CityCat' },
             { id: 't2', city: 'Gold Coast', start:'2025-10-22', end:'2025-10-26', budget: 180, notes: 'Surf & Theme Parks' },
@@ -323,44 +341,35 @@
                     </div>
         
                     <div class="profile-panel">
+                        <!-- AI Token 卡片（獨立 card，不要塞在 .list 裡） -->
+                        <div class="card token-card" id="tokenCard">
+                            <div class="token-info">
+                                <div class="token-label">AI Tokens</div>
+                                <div class="token-num"><span id="tokenBalance">${AppState.tokens}</span></div>
+                                <div class="token-sub">${AppState.canClaimDaily() ? 'Daily reward available' : 'Come back tomorrow'}</div>
+                            </div>
+                            <button class="btn outline" id="claimDailyBtn" style="width:auto">Get daily token</button>
+                        </div>
+        
                         <nav class="list">
                             <a class="list-item" href="#/home">
                                 <span class="icon">🧳</span>
                                 <span class="text">My Trips</span>
                                 <span class="chev">›</span>
                             </a>
-                            <a class="list-item" href="#">
-                                <span class="icon">💾</span>
-                                <span class="text">Saved</span>
-                                <span class="chev">›</span>
-                            </a>
-                            <a class="list-item" href="#">
-                                <span class="icon">📝</span>
-                                <span class="text">My Reviews</span>
-                                <span class="chev">›</span>
-                            </a>
-                            <a class="list-item" href="#">
-                                <span class="icon">👛</span>
-                                <span class="text">Wallet</span>
-                                <span class="chev">›</span>
-                            </a>
-                            <a class="list-item" href="#">
-                                <span class="icon">⚙️</span>
-                                <span class="text">Settings</span>
-                                <span class="chev">›</span>
-                            </a>
-                            <a class="list-item" href="#">
-                                <span class="icon">❓</span>
-                                <span class="text">Help</span>
-                                <span class="chev">›</span>
-                            </a>
+                            <a class="list-item" href="#"><span class="icon">💾</span><span class="text">Saved</span><span class="chev">›</span></a>
+                            <a class="list-item" href="#"><span class="icon">📝</span><span class="text">My Reviews</span><span class="chev">›</span></a>
+                            <a class="list-item" href="#"><span class="icon">👛</span><span class="text">Wallet</span><span class="chev">›</span></a>
+                            <a class="list-item" href="#"><span class="icon">⚙️</span><span class="text">Settings</span><span class="chev">›</span></a>
+                            <a class="list-item" href="#"><span class="icon">❓</span><span class="text">Help</span><span class="chev">›</span></a>
                         </nav>
         
                         <button class="logout-btn" id="logoutBtnInline">Logout</button>
                     </div>
                 </section>
             `;
-        },    
+        },
+         
         
         map() {
             return `
@@ -407,16 +416,18 @@
 
     function mount(html) {
         const root = document.getElementById('appRoot');
-    
-        // 渲染視圖
         root.innerHTML = html;
     
-        // 年份元素不是每個頁面都有，做防呆
         const yearEl = document.getElementById('year');
         if (yearEl) yearEl.textContent = String(new Date().getFullYear());
     
+        try {
+        ensureAiWidget();
+        } catch (err) {
+        console.warn('[AI widget] init failed:', err);
+        }
+    
         wireGlobalNav();
-        ensureAiWidget();   // 這行才會被執行到，AI 漂浮按鈕就會出現
     }
 
     function fmt(d){ const m = d.getMonth()+1, day=d.getDate(); return `${d.getFullYear()}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`; }
@@ -494,9 +505,13 @@
             panel.innerHTML = `
                 <div class="ai-head">
                     <div class="ai-title">AI suggestion</div>
+                    <div class="ai-wallet">🪙 <b id="aiWalletCount">0</b></div>
                     <button class="ai-close" id="aiClose" aria-label="Close">✕</button>
                 </div>
                 <div id="aiSuggestions"></div>
+                <div class="ai-foot">
+                    <button class="btn outline" id="aiClaimBtn">Get daily token (+1)</button>
+                </div>
             `;
             host.appendChild(panel);
         }
@@ -508,6 +523,33 @@
         // 更新建議內容
         renderAiSuggestions(panel);
     
+        function updateAiWalletUI(){
+            const n = AppState.tokens;
+            const can = AppState.canClaimDaily();
+            const walletEl = panel.querySelector('#aiWalletCount');
+            if (walletEl) walletEl.textContent = String(n);
+            const claimBtn = panel.querySelector('#aiClaimBtn');
+            if (claimBtn){
+                claimBtn.disabled = !can;
+                claimBtn.textContent = can ? 'Get daily token (+1)' : 'Come back tomorrow';
+            }
+            const applyBtn = panel.querySelector('#aiApply');
+            if (applyBtn) applyBtn.disabled = n <= 0;
+        }
+        updateAiWalletUI();
+        
+        panel.querySelector('#aiClaimBtn').onclick = async () => {
+            const btn = panel.querySelector('#aiClaimBtn');
+            if (!btn || btn.disabled) return;
+            // 模擬「看廣告」1.5 秒
+            btn.disabled = true; btn.textContent = 'Watching ad…';
+            await new Promise(r => setTimeout(r, 1500));
+            if (AppState.claimDaily()){
+                alert('Token +1');
+            }
+            updateAiWalletUI();
+        };
+
         // 未登入頁隱藏
         const isAuthPage = document.body.classList.contains('auth');
         fab.hidden = isAuthPage;
@@ -520,7 +562,32 @@
         const box = panel.querySelector('#aiSuggestions');
         const route = currentRoute();
         const params = currentParams();
-    
+        const applyBtn = panel.querySelector('#aiApply');
+        if (applyBtn) applyBtn.disabled = AppState.tokens <= 0;
+
+        panel.querySelector('#aiApply').onclick = () => {
+            if (!AppState.consumeToken(1)){
+                alert('Not enough tokens. Claim your daily token first.');
+                return;
+            }
+            // === 下面保留你原本的「套用建議」邏輯 ===
+            if (currentRoute() === '#/planner') {
+                const ta = document.getElementById('notes');
+                if (ta) ta.value = (ta.value ? ta.value + '\n' : '') + `AI • ${s.apply}`;
+            } else {
+                const idx = tripIdx;
+                const t = AppState.trips[idx];
+                AppState.trips[idx] = { ...t, notes: (t.notes ? t.notes + ' • ' : '') + `AI: ${s.apply}` };
+                alert('Applied to your trip notes!');
+            }
+            panel.classList.remove('show');
+            const dot = document.querySelector('#aiFab .dot'); if (dot) dot.remove();
+
+            // 更新錢包顯示
+            const w = document.getElementById('aiWalletCount');
+            if (w) w.textContent = String(AppState.tokens);
+        };
+
         // 決定要作用到哪個 trip
         let tripIdx = -1;
         if (route === '#/planner' && params.t) {
@@ -773,17 +840,44 @@
 
 
         // Profile
-        const editBtn = document.getElementById('editProfileBtn');
-        const logoutInline = document.getElementById('logoutBtnInline');
-        if (editBtn || logoutInline) {
+        const editBtn       = document.getElementById('editProfileBtn');
+        const logoutInline  = document.getElementById('logoutBtnInline');
+        const claimDailyBtn = document.getElementById('claimDailyBtn');
+        const balEl         = document.getElementById('tokenBalance');
+
+        if (editBtn || logoutInline || claimDailyBtn) {   // ← 一定要把 claimDailyBtn 也放進條件
             if (editBtn) {
                 editBtn.onclick = () => alert('Prototype: edit profile coming soon.');
             }
             if (logoutInline) {
                 logoutInline.onclick = () => { AppState.logout(); location.hash = '#/login'; };
             }
+            if (claimDailyBtn) {
+                const refresh = () => {
+                    if (balEl) balEl.textContent = String(AppState.tokens);
+                    const can = AppState.canClaimDaily();
+                    claimDailyBtn.disabled = !can;
+                    claimDailyBtn.textContent = can ? 'Get daily token' : 'Come back tomorrow';
+                    // （可選）同步 AI 面板的錢包與按鈕狀態
+                    const w = document.getElementById('aiWalletCount');
+                    if (w) w.textContent = String(AppState.tokens);
+                    const applyBtn = document.getElementById('aiApply');
+                    if (applyBtn) applyBtn.disabled = AppState.tokens <= 0;
+                };
+                refresh();
+
+                claimDailyBtn.onclick = async () => {
+                    if (!AppState.canClaimDaily()) return;
+                    claimDailyBtn.disabled = true;
+                    claimDailyBtn.textContent = 'Watching ad…';
+                    await new Promise(r => setTimeout(r, 1200)); // 模擬觀看廣告
+                    if (AppState.claimDaily()) alert('Token +1');
+                    refresh();
+                };
+            }
             return;
         }
+
 
 
         // Date range view
